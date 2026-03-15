@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, Suspense } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
@@ -14,10 +14,22 @@ import { LogIn } from "lucide-react"
 function LoginForm() {
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
+  const [checking, setChecking] = useState(true)
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirect = searchParams.get("redirect") || "/"
   const supabase = createClient()
+
+  // Check if user is already signed in
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        router.replace(redirect)
+      } else {
+        setChecking(false)
+      }
+    })
+  }, [supabase, router, redirect])
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -55,6 +67,16 @@ function LoginForm() {
       toast.error("Google sign-in failed", { description: error.message })
       setGoogleLoading(false)
     }
+  }
+
+  // Show loading spinner while checking auth
+  if (checking) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        <p className="mt-3 text-sm text-muted-foreground">Checking session...</p>
+      </div>
+    )
   }
 
   return (
@@ -131,7 +153,11 @@ export default function LoginPage() {
           <p className="mt-2 text-sm text-muted-foreground">Sign in to your account</p>
         </div>
 
-        <Suspense fallback={<div className="h-48 animate-pulse rounded-xl bg-muted" />}>
+        <Suspense fallback={
+          <div className="flex flex-col items-center justify-center py-12">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          </div>
+        }>
           <LoginForm />
         </Suspense>
 
