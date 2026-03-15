@@ -34,7 +34,7 @@ export default function SignUpPage() {
         emailRedirectTo:
           process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ||
           `${window.location.origin}/`,
-        data: { first_name: firstName, phone },
+        data: { full_name: firstName, phone },
       },
     })
 
