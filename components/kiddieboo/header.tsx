@@ -31,13 +31,18 @@ export function Header() {
       setUser(user)
       
       if (user) {
-        // Check admin status from profiles table
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("is_admin")
-          .eq("id", user.id)
-          .single()
-        setIsAdmin(profile?.is_admin ?? false)
+        // Check admin status: hardcoded fallback + profiles table
+        const ADMIN_EMAIL = "odedasiedu1@gmail.com"
+        if (user.email === ADMIN_EMAIL) {
+          setIsAdmin(true)
+        } else {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("is_admin")
+            .eq("id", user.id)
+            .single()
+          setIsAdmin(profile?.is_admin ?? false)
+        }
 
         const { count } = await supabase
           .from("cart")
