@@ -4,6 +4,7 @@ import { useEffect, useCallback, useState } from "react"
 import useEmblaCarousel from "embla-carousel-react"
 import Autoplay from "embla-carousel-autoplay"
 import Link from "next/link"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Sparkles, Truck, ChevronLeft, ChevronRight } from "lucide-react"
 
@@ -75,17 +76,13 @@ export function Hero() {
                     className="relative min-w-0 flex-[0_0_100%] h-full"
                     style={{ minHeight: "320px" }}
                   >
-                    <img
+                    <Image
                       src={slide.src}
                       alt={slide.alt}
-                      className="absolute inset-0 h-full w-full object-cover object-top"
-                      onError={(e) => {
-                        // Fallback to hero-banner if slide image not found
-                        const target = e.currentTarget as HTMLImageElement
-                        if (target.src !== window.location.origin + "/images/hero-banner.jpg") {
-                          target.src = "/images/hero-banner.jpg"
-                        }
-                      }}
+                      fill
+                      sizes="(max-width: 768px) 100vw, 50vw"
+                      className="object-cover object-top"
+                      priority={i === 0}
                     />
                   </div>
                 ))}

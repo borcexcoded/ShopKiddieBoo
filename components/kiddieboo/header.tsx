@@ -34,21 +34,22 @@ export function Header() {
         // Check admin status: hardcoded fallback + profiles table
         const ADMIN_EMAIL = "odedasiedu1@gmail.com"
         if (user.email === ADMIN_EMAIL) {
+          // Fetch cart count while we know admin status
+          const { count } = await supabase
+            .from("cart")
+            .select("*", { count: "exact", head: true })
+            .eq("user_id", user.id)
           setIsAdmin(true)
+          setCartCount(count ?? 0)
         } else {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("is_admin")
-            .eq("id", user.id)
-            .single()
+          // Parallelize profile + cart queries
+          const [{ data: profile }, { count }] = await Promise.all([
+            supabase.from("profiles").select("is_admin").eq("id", user.id).single(),
+            supabase.from("cart").select("*", { count: "exact", head: true }).eq("user_id", user.id),
+          ])
           setIsAdmin(profile?.is_admin ?? false)
+          setCartCount(count ?? 0)
         }
-
-        const { count } = await supabase
-          .from("cart")
-          .select("*", { count: "exact", head: true })
-          .eq("user_id", user.id)
-        setCartCount(count ?? 0)
       } else {
         setIsAdmin(false)
       }
