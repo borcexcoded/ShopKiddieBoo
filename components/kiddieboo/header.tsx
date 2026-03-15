@@ -9,8 +9,6 @@ import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import type { User } from "@supabase/supabase-js"
 
-const ADMIN_EMAIL = "odedasiedu1@gmail.com"
-
 const navLinks = [
   { href: "/", label: "Home" },
   { href: "/shop", label: "Shop" },
@@ -33,17 +31,13 @@ export function Header() {
       setUser(user)
       
       if (user) {
-        // Check if admin by email or by profiles table
-        if (user.email === ADMIN_EMAIL) {
-          setIsAdmin(true)
-        } else {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("is_admin")
-            .eq("id", user.id)
-            .single()
-          setIsAdmin(profile?.is_admin ?? false)
-        }
+        // Check admin status from profiles table
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("is_admin")
+          .eq("id", user.id)
+          .single()
+        setIsAdmin(profile?.is_admin ?? false)
 
         const { count } = await supabase
           .from("cart")
