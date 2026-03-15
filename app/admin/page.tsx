@@ -4,6 +4,8 @@ import { AdminDashboard } from "@/components/kiddieboo/admin/dashboard"
 export default async function AdminPage() {
   const supabase = await createClient()
 
+  const { data: { user: currentUser } } = await supabase.auth.getUser()
+
   const [
     { data: products },
     { data: orders },
@@ -30,6 +32,7 @@ export default async function AdminPage() {
       orders={orders ?? []}
       messages={messages ?? []}
       users={users ?? []}
+      currentUserEmail={currentUser?.email}
       stats={{
         totalProducts: productCount ?? 0,
         totalOrders: orderCount ?? 0,

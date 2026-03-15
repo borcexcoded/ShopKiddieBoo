@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -17,6 +16,7 @@ import {
   Trash2,
   Mail,
   X,
+  Crown,
 } from "lucide-react"
 
 type UserProfile = {
@@ -27,15 +27,26 @@ type UserProfile = {
   created_at: string
 }
 
-export function UsersTab({ users: initialUsers }: { users: UserProfile[] }) {
+const SUPER_ADMIN_EMAIL = "odedasiedu1@gmail.com"
+
+export function UsersTab({
+  users: initialUsers,
+  currentUserEmail,
+}: {
+  users: UserProfile[]
+  currentUserEmail?: string
+}) {
   const [users, setUsers] = useState(initialUsers)
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState<"all" | "admins" | "customers">("all")
   const [showInvite, setShowInvite] = useState(false)
   const [inviteEmail, setInviteEmail] = useState("")
+  const [inviteAsAdmin, setInviteAsAdmin] = useState(false)
   const [inviteLoading, setInviteLoading] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [togglingId, setTogglingId] = useState<string | null>(null)
+
+  const isSuperAdmin = currentUserEmail === SUPER_ADMIN_EMAIL
 
   const filtered = users.filter((user) => {
     const matchesSearch =
@@ -52,18 +63,28 @@ export function UsersTab({ users: initialUsers }: { users: UserProfile[] }) {
   const customerCount = users.filter((u) => !u.is_admin).length
 
   async function toggleAdmin(userId: string, currentIsAdmin: boolean) {
+    if (!isSuperAdmin) {
+      toast.error("Only the super admin can change roles")
+      return
+    }
+
+    const targetUser = users.find((u) => u.id === userId)
+    if (targetUser?.email === SUPER_ADMIN_EMAIL) {
+      toast.error("Cannot modify the super admin's role")
+      return
+    }
+
     setTogglingId(userId)
-    const supabase = createClient()
-    const { error } = await supabase
-      .from("profiles")
-      .update({ is_admin: !currentIsAdmin })
-      .eq("id", userId)
+    const res = await fetch("/api/admin/users", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, is_admin: !currentIsAdmin }),
+    })
 
     setTogglingId(null)
-    if (error) {
-      toast.error("Failed to update role", {
-        description: error.message,
-      })
+    if (!res.ok) {
+      const { error } = await res.json()
+      toast.error("Failed to update role", { description: error })
     } else {
       setUsers((prev) =>
         prev.map((u) => (u.id === userId ? { ...u, is_admin: !currentIsAdmin } : u))
@@ -77,6 +98,10 @@ export function UsersTab({ users: initialUsers }: { users: UserProfile[] }) {
   }
 
   async function handleDelete(user: UserProfile) {
+    if (user.email === SUPER_ADMIN_EMAIL) {
+      toast.error("Cannot delete the super admin account")
+      return
+    }
     if (!confirm(`Delete account for ${user.email}? This cannot be undone.`)) return
 
     setDeletingId(user.id)
@@ -102,11 +127,16 @@ export function UsersTab({ users: initialUsers }: { users: UserProfile[] }) {
     e.preventDefault()
     if (!inviteEmail.trim()) return
 
+    if (inviteAsAdmin && !isSuperAdmin) {
+      toast.error("Only the super admin can invite new admins")
+      return
+    }
+
     setInviteLoading(true)
     const res = await fetch("/api/admin/users", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: inviteEmail.trim() }),
+      body: JSON.stringify({ email: inviteEmail.trim(), makeAdmin: inviteAsAdmin }),
     })
 
     setInviteLoading(false)
@@ -115,9 +145,10 @@ export function UsersTab({ users: initialUsers }: { users: UserProfile[] }) {
       toast.error("Invite failed", { description: error })
     } else {
       toast.success("Invitation sent!", {
-        description: `An invite email has been sent to ${inviteEmail.trim()}.`,
+        description: `An invite email has been sent to ${inviteEmail.trim()}${inviteAsAdmin ? " with admin access" : ""}.`,
       })
       setInviteEmail("")
+      setInviteAsAdmin(false)
       setShowInvite(false)
     }
   }
@@ -128,7 +159,15 @@ export function UsersTab({ users: initialUsers }: { users: UserProfile[] }) {
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-extrabold text-foreground">User Management</h1>
-          <p className="text-sm text-muted-foreground">{users.length} registered users</p>
+          <p className="text-sm text-muted-foreground">
+            {users.length} registered users
+            {isSuperAdmin && (
+              <span className="ml-2 inline-flex items-center gap-1 text-amber-600">
+                <Crown className="h-3.5 w-3.5" />
+                Super Admin
+              </span>
+            )}
+          </p>
         </div>
         <Button onClick={() => setShowInvite((v) => !v)} variant={showInvite ? "outline" : "default"}>
           {showInvite ? (
@@ -149,24 +188,38 @@ export function UsersTab({ users: initialUsers }: { users: UserProfile[] }) {
       {showInvite && (
         <form
           onSubmit={handleInvite}
-          className="mb-6 flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-end"
+          className="mb-6 flex flex-col gap-3 rounded-xl border border-border bg-card p-4"
         >
-          <div className="flex-1">
-            <Label htmlFor="invite-email" className="mb-1.5 block text-sm font-semibold">
-              Email address
-            </Label>
-            <Input
-              id="invite-email"
-              type="email"
-              required
-              placeholder="new.user@example.com"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-            />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="flex-1">
+              <Label htmlFor="invite-email" className="mb-1.5 block text-sm font-semibold">
+                Email address
+              </Label>
+              <Input
+                id="invite-email"
+                type="email"
+                required
+                placeholder="new.user@example.com"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+              />
+            </div>
+            <Button type="submit" disabled={inviteLoading}>
+              {inviteLoading ? "Sending..." : "Send Invite"}
+            </Button>
           </div>
-          <Button type="submit" disabled={inviteLoading}>
-            {inviteLoading ? "Sending..." : "Send Invite"}
-          </Button>
+          {isSuperAdmin && (
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={inviteAsAdmin}
+                onChange={(e) => setInviteAsAdmin(e.target.checked)}
+                className="h-4 w-4 rounded border-border"
+              />
+              <Shield className="h-3.5 w-3.5 text-primary" />
+              Grant admin access to this user
+            </label>
+          )}
         </form>
       )}
 
@@ -239,71 +292,89 @@ export function UsersTab({ users: initialUsers }: { users: UserProfile[] }) {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((user) => (
-              <tr key={user.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                      {(user.full_name ?? user.email ?? "?")[0].toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-foreground">{user.full_name || <span className="text-muted-foreground italic">No name</span>}</p>
-                      <p className="text-xs text-muted-foreground">{user.email}</p>
-                      <div className="mt-1 sm:hidden">
-                        {user.is_admin ? (
-                          <Badge className="bg-primary text-primary-foreground text-[10px]">Admin</Badge>
-                        ) : (
-                          <Badge variant="secondary" className="text-[10px]">Customer</Badge>
-                        )}
+            {filtered.map((user) => {
+              const isSuper = user.email === SUPER_ADMIN_EMAIL
+              return (
+                <tr key={user.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                        {(user.full_name ?? user.email ?? "?")[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-foreground flex items-center gap-1.5">
+                          {user.full_name || <span className="text-muted-foreground italic">No name</span>}
+                          {isSuper && <Crown className="h-3.5 w-3.5 text-amber-500" />}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{user.email}</p>
+                        <div className="mt-1 sm:hidden">
+                          {isSuper ? (
+                            <Badge className="bg-amber-500 text-white text-[10px]">Super Admin</Badge>
+                          ) : user.is_admin ? (
+                            <Badge className="bg-primary text-primary-foreground text-[10px]">Admin</Badge>
+                          ) : (
+                            <Badge variant="secondary" className="text-[10px]">Customer</Badge>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </td>
-                <td className="hidden px-4 py-3 sm:table-cell">
-                  {user.is_admin ? (
-                    <Badge className="bg-primary text-primary-foreground">Admin</Badge>
-                  ) : (
-                    <Badge variant="secondary">Customer</Badge>
-                  )}
-                </td>
-                <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
-                  {new Date(user.created_at).toLocaleDateString()}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center justify-end gap-1.5">
-                    <Button
-                      size="sm"
-                      variant={user.is_admin ? "outline" : "default"}
-                      onClick={() => toggleAdmin(user.id, user.is_admin)}
-                      disabled={togglingId === user.id}
-                      className="shrink-0"
-                    >
-                      {user.is_admin ? (
-                        <>
-                          <ShieldOff className="h-3.5 w-3.5 sm:mr-1.5" />
-                          <span className="hidden sm:inline">Remove Admin</span>
-                        </>
+                  </td>
+                  <td className="hidden px-4 py-3 sm:table-cell">
+                    {isSuper ? (
+                      <Badge className="bg-amber-500 text-white">Super Admin</Badge>
+                    ) : user.is_admin ? (
+                      <Badge className="bg-primary text-primary-foreground">Admin</Badge>
+                    ) : (
+                      <Badge variant="secondary">Customer</Badge>
+                    )}
+                  </td>
+                  <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
+                    {new Date(user.created_at).toLocaleDateString()}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-1.5">
+                      {isSuper ? (
+                        <span className="text-xs text-muted-foreground italic">Protected</span>
                       ) : (
                         <>
-                          <Shield className="h-3.5 w-3.5 sm:mr-1.5" />
-                          <span className="hidden sm:inline">Make Admin</span>
+                          {isSuperAdmin && (
+                            <Button
+                              size="sm"
+                              variant={user.is_admin ? "outline" : "default"}
+                              onClick={() => toggleAdmin(user.id, user.is_admin)}
+                              disabled={togglingId === user.id}
+                              className="shrink-0"
+                            >
+                              {user.is_admin ? (
+                                <>
+                                  <ShieldOff className="h-3.5 w-3.5 sm:mr-1.5" />
+                                  <span className="hidden sm:inline">Revoke Admin</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Shield className="h-3.5 w-3.5 sm:mr-1.5" />
+                                  <span className="hidden sm:inline">Make Admin</span>
+                                </>
+                              )}
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDelete(user)}
+                            disabled={deletingId === user.id}
+                            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            aria-label="Delete user"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
                         </>
                       )}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleDelete(user)}
-                      disabled={deletingId === user.id}
-                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                      aria-label="Delete user"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground">

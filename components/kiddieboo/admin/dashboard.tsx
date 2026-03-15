@@ -29,6 +29,7 @@ type Props = {
   orders: any[]
   messages: any[]
   users: any[]
+  currentUserEmail?: string
   stats: {
     totalProducts: number
     totalOrders: number
@@ -47,7 +48,7 @@ const tabs = [
 
 type TabKey = (typeof tabs)[number]["key"]
 
-export function AdminDashboard({ products, orders, messages, users, stats }: Props) {
+export function AdminDashboard({ products, orders, messages, users, currentUserEmail, stats }: Props) {
   const [activeTab, setActiveTab] = useState<TabKey>("overview")
   const router = useRouter()
 
@@ -196,7 +197,7 @@ export function AdminDashboard({ products, orders, messages, users, stats }: Pro
 
         {activeTab === "products" && <ProductsTab products={products} />}
         {activeTab === "orders" && <OrdersTab orders={orders} />}
-        {activeTab === "users" && <UsersTab users={users} />}
+        {activeTab === "users" && <UsersTab users={users} currentUserEmail={currentUserEmail} />}
         {activeTab === "messages" && <MessagesTab messages={messages} />}
       </main>
 
